@@ -78,11 +78,16 @@ bot.start(async (ctx) => {
     await ctx.replyWithMarkdown(welcomeMessage, mainMenu);
 });
 
-// [Служебная команда] - Получение file_id для PDF
-bot.on('document', async (ctx) => {
-    if (ctx.message.document.mime_type === 'application/pdf') {
-        await ctx.reply('PDF получен. Вот его file_id:');
-        await ctx.reply(ctx.message.document.file_id);
+// [Служебная команда] - Получение file_id для PDF из канала
+bot.on('channel_post', async (ctx) => {
+    // Проверяем, что пост содержит документ и что это PDF
+    if (ctx.channelPost && ctx.channelPost.document && ctx.channelPost.document.mime_type === 'application/pdf') {
+        const fileId = ctx.channelPost.document.file_id;
+        const chatId = ctx.channelPost.chat.id;
+        
+        // Отправляем ответ в тот же канал
+        await bot.telegram.sendMessage(chatId, `PDF получен (из канала). Вот его file_id:`);
+        await bot.telegram.sendMessage(chatId, `<code>${fileId}</code>`, { parse_mode: 'HTML' });
     }
 });
 
