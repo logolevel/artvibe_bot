@@ -8,14 +8,8 @@ const {
     PORT,
     WEBHOOK_URL,
     INVITE_LINK,
-    EXPRESS_PDF_FILE_ID,
-    AUTHOR_PDF_FILE_ID,
     ADMIN_ID_RADMILA,
-    ADMIN_ID_DANYLO,
     ADMIN_ID_ANASTASIA,
-    ADMIN_NAME_RADMILA,
-    ADMIN_NAME_DANYLO,
-    ADMIN_NAME_ANASTASIA,
     CARD_NUMBER_RUB,
     IBAN_EUR,
     CARD_NUMBER_UAH,
@@ -24,6 +18,12 @@ const {
 if (!BOT_TOKEN || !PORT || !WEBHOOK_URL) {
     throw new Error("Необходимо задать переменные окружения: BOT_TOKEN, PORT и WEBHOOK_URL");
 }
+
+// --- Конфигурация в коде ---
+const ADMIN_NAME_RADMILA = '@radaeuro';
+const ADMIN_NAME_ANASTASIA = '@ArtBenidorm';
+const EXPRESS_PDF_FILE_ID = 'BQACAgIAAyEFAASeM37lAAMWaI439QWdHkmsu3nuabqRF-mAHbAAAk2_AALP-XFI8WJ1uHvIdlI2BA';
+const AUTHOR_PDF_FILE_ID = 'BQACAgIAAyEFAASeM37lAAMZaI44n8FffX7177dWCgqwPMX_iZkAAlG_AALP-XFIg8RqNhvVhgc2BA';
 
 // --- Тексты на кнопках ---
 const COPY_BUTTON_RUB = "Скопировать номер";
@@ -180,8 +180,8 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
         adminName = ADMIN_NAME_RADMILA;
         copyButtonText = COPY_BUTTON_RUB;
     } else if (currency === 'eur') {
-        adminId = ADMIN_ID_DANYLO;
-        adminName = ADMIN_NAME_DANYLO;
+        adminId = ADMIN_ID_RADMILA;
+        adminName = ADMIN_NAME_RADMILA;
         copyButtonText = COPY_BUTTON_EUR;
     } else { // uah
         adminId = ADMIN_ID_ANASTASIA;
