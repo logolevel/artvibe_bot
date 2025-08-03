@@ -26,9 +26,9 @@ if (!BOT_TOKEN || !PORT || !WEBHOOK_URL) {
 }
 
 // --- Тексты на кнопках ---
-const COPY_BUTTON_RUB = "Скопировать номер 👇";
-const COPY_BUTTON_EUR = "Скопировать IBAN 👇";
-const COPY_BUTTON_UAH = "Скопировать номер 👇";
+const COPY_BUTTON_RUB = "Скопировать номер";
+const COPY_BUTTON_EUR = "Скопировать IBAN";
+const COPY_BUTTON_UAH = "Скопировать номер";
 
 
 // --- Инициализация бота и Express ---
@@ -196,20 +196,32 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
 
 
 // Обработчики для кнопок "Скопировать"
-bot.action(/copy_(rub|eur|uah)/, (ctx) => {
+bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
     const currency = ctx.match[1];
     let textToCopy = '';
+    let entityType = 'номер карты';
 
-    // Логика стала намного проще и надежнее
-    if (currency === 'rub') textToCopy = CARD_NUMBER_RUB;
-    if (currency === 'eur') textToCopy = IBAN_EUR;
-    if (currency === 'uah') textToCopy = CARD_NUMBER_UAH;
+    if (currency === 'rub') {
+        textToCopy = CARD_NUMBER_RUB;
+        entityType = 'номер карты';
+    } else if (currency === 'eur') {
+        textToCopy = IBAN_EUR;
+        entityType = 'IBAN';
+    } else if (currency === 'uah') {
+        textToCopy = CARD_NUMBER_UAH;
+        entityType = 'номер карты';
+    }
+
+    // Сразу убираем часики с кнопки
+    ctx.answerCbQuery();
 
     if (textToCopy) {
-        ctx.reply(`<code>${textToCopy}</code>`, { parse_mode: 'HTML' });
-        ctx.answerCbQuery('Номер скопирован!');
+        // Отправляем инструкцию
+        await ctx.reply(`Нажмите на ${entityType} внизу, чтобы скопировать его 👇`);
+        // Отправляем номер для копирования
+        await ctx.reply(`<code>${textToCopy}</code>`, { parse_mode: 'HTML' });
     } else {
-        ctx.answerCbQuery('Не удалось извлечь номер для копирования.');
+        await ctx.reply('Не удалось найти номер для копирования. Пожалуйста, свяжитесь с поддержкой.');
     }
 });
 
