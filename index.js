@@ -37,7 +37,7 @@ const app = express();
 
 // --- Временное хранилище ---
 const paymentExpectations = new Map();
-const userPaymentMessages = new Map();
+const userPaymentMessages = new Map(); 
 
 // --- Клавиатуры ---
 const mainMenu = Markup.keyboard([
@@ -65,20 +65,35 @@ const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
     [Markup.button.callback('Оплата в гривнах', `${coursePrefix}_pay_uah`)],
 ]);
 
-// --- Вспомогательная функция для очистки сообщений ---
-async function cleanupPreviousMessages(ctx) {
+// --- Вспомогательные функции для очистки сообщений ---
+async function cleanupAllPaymentMessages(ctx) {
     const userId = ctx.from.id;
-    const messagesToDelete = userPaymentMessages.get(userId);
+    const messageState = userPaymentMessages.get(userId);
 
-    if (messagesToDelete && messagesToDelete.length > 0) {
-        await Promise.all(
-            messagesToDelete.map(msgId => ctx.deleteMessage(msgId).catch(() => {}))
-        );
+    if (messageState) {
+        const allMessageIds = [messageState.mainMenuId, ...messageState.subMenuIds].filter(id => id);
+        if (allMessageIds.length > 0) {
+            await Promise.all(
+                allMessageIds.map(msgId => ctx.deleteMessage(msgId).catch(() => {}))
+            );
+        }
     }
-
     userPaymentMessages.delete(userId);
 }
 
+async function cleanupSubMessages(ctx) {
+    const userId = ctx.from.id;
+    const messageState = userPaymentMessages.get(userId);
+
+    if (messageState && messageState.subMenuIds.length > 0) {
+        await Promise.all(
+            messageState.subMenuIds.map(msgId => ctx.deleteMessage(msgId).catch(() => {}))
+        );
+
+        messageState.subMenuIds = [];
+        userPaymentMessages.set(userId, messageState);
+    }
+}
 
 // --- Логика бота ---
 
@@ -145,17 +160,17 @@ bot.action('author_learn_more', (ctx) => {
 
 // --- Начало процесса оплаты ---
 bot.action(['express_buy', 'author_buy'], async (ctx) => {
-    await cleanupPreviousMessages(ctx);
+    await cleanupAllPaymentMessages(ctx);
     const coursePrefix = ctx.match[0].split('_')[0];
     const sentMessage = await ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
-    userPaymentMessages.set(ctx.from.id, [sentMessage.message_id]);
+
+    userPaymentMessages.set(ctx.from.id, { mainMenuId: sentMessage.message_id, subMenuIds: [] });
     ctx.answerCbQuery();
 });
 
 
 // --- Обработчики для кнопок оплаты ---
 
-// Вспомогательная функция для форматирования номеров с пробелами
 const formatForDisplay = (numberString) => {
     if (!numberString) return '';
     return numberString.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
@@ -168,7 +183,7 @@ const createRequisitesText = (currency, coursePrefix) => {
         priceRub = '7500 руб.';
         priceEur = '75 EUR';
         priceUah = '3500 UAH';
-    } else { // 'author'
+    } else {
         priceRub = '14000 руб.';
         priceEur = '150 EUR';
         priceUah = '7000 UAH';
@@ -191,10 +206,10 @@ const createRequisitesText = (currency, coursePrefix) => {
 };
 
 bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
-    await cleanupPreviousMessages(ctx);
-
-    const messageIds = [];
+    await cleanupSubMessages(ctx);
+    
     const userId = ctx.from.id;
+    const messageState = userPaymentMessages.get(userId) || { mainMenuId: null, subMenuIds: [] };
     const [_, coursePrefix, currency] = ctx.match;
     const requisitesText = createRequisitesText(currency, coursePrefix);
     
@@ -208,7 +223,7 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
         adminId = ADMIN_ID_RADMILA;
         adminName = ADMIN_NAME_RADMILA;
         copyButtonText = COPY_BUTTON_EUR;
-    } else { // uah
+    } else {
         adminId = ADMIN_ID_ANASTASIA;
         adminName = ADMIN_NAME_ANASTASIA;
         copyButtonText = COPY_BUTTON_UAH;
@@ -220,7 +235,7 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
         requisitesText,
         Markup.inlineKeyboard([Markup.button.callback(copyButtonText, `copy_${currency}`)])
     );
-    messageIds.push(requisitesMsg.message_id);
+    messageState.subMenuIds.push(requisitesMsg.message_id);
 
     let followUpMsg;
     if (ctx.from.username) {
@@ -229,16 +244,16 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
     } else {
         followUpMsg = await ctx.reply(`После оплаты, пожалуйста, отправьте нам скриншот об оплате в личные сообщения: ${adminName} и мы сразу же отправим Вам ссылку на курс.`);
     }
-    messageIds.push(followUpMsg.message_id);
+    messageState.subMenuIds.push(followUpMsg.message_id);
     
-    userPaymentMessages.set(userId, messageIds);
+    userPaymentMessages.set(userId, messageState);
 });
 
 
 // Обработчики для кнопок "Скопировать"
 bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
     const userId = ctx.from.id;
-    const currentMessages = userPaymentMessages.get(userId) || [];
+    const messageState = userPaymentMessages.get(userId) || { mainMenuId: null, subMenuIds: [] };
     const currency = ctx.match[1];
     let textToCopy = '';
     let entityType = 'номер карты';
@@ -249,7 +264,7 @@ bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
     } else if (currency === 'eur') {
         textToCopy = IBAN_EUR;
         entityType = 'IBAN';
-    } else if (currency === 'uah') {
+    } else {
         textToCopy = CARD_NUMBER_UAH;
         entityType = 'номер карты';
     }
@@ -260,18 +275,19 @@ bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
         const instructionMsg = await ctx.reply(`Нажмите на ${entityType} ниже, чтобы скопировать 👇`);
         const numberMsg = await ctx.reply(`<code>${textToCopy.replace(/\s/g, '')}</code>`, { parse_mode: 'HTML' });
         
-        currentMessages.push(instructionMsg.message_id, numberMsg.message_id);
-        userPaymentMessages.set(userId, currentMessages);
+        messageState.subMenuIds.push(instructionMsg.message_id, numberMsg.message_id);
+        userPaymentMessages.set(userId, messageState);
     } else {
         const errorMsg = await ctx.reply('Не удалось найти номер для копирования. Пожалуйста, свяжитесь с поддержкой.');
-        currentMessages.push(errorMsg.message_id);
-        userPaymentMessages.set(userId, currentMessages);
+        messageState.subMenuIds.push(errorMsg.message_id);
+        userPaymentMessages.set(userId, messageState);
     }
 });
 
 // Обработка получения фото (скриншота оплаты)
 bot.on('photo', async (ctx) => {
     const userId = ctx.from.id;
+    await cleanupAllPaymentMessages(ctx);
     const expectation = paymentExpectations.get(userId);
 
     if (expectation) {
