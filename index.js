@@ -26,9 +26,9 @@ const EXPRESS_PDF_FILE_ID = 'BQACAgIAAyEFAASeM37lAAMWaI439QWdHkmsu3nuabqRF-mAHbA
 const AUTHOR_PDF_FILE_ID = 'BQACAgIAAyEFAASeM37lAAMZaI44n8FffX7177dWCgqwPMX_iZkAAlG_AALP-XFIg8RqNhvVhgc2BA';
 
 // --- Тексты на кнопках ---
-const COPY_BUTTON_RUB = "Скопировать номер";
-const COPY_BUTTON_EUR = "Скопировать IBAN";
-const COPY_BUTTON_UAH = "Скопировать номер";
+const COPY_BUTTON_RUB = "Показать номер карты";
+const COPY_BUTTON_EUR = "Показать IBAN";
+const COPY_BUTTON_UAH = "Показать номер карты";
 
 
 // --- Инициализация бота и Express ---
@@ -156,6 +156,12 @@ const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, a
 
 // --- Обработчики для кнопок оплаты ---
 
+// Вспомогательная функция для форматирования номеров с пробелами
+const formatForDisplay = (numberString) => {
+    if (!numberString) return '';
+    return numberString.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
+};
+
 const createRequisitesText = (currency, coursePrefix) => {
     let priceRub, priceEur, priceUah;
 
@@ -169,13 +175,18 @@ const createRequisitesText = (currency, coursePrefix) => {
         priceUah = '7000 UAH';
     }
 
+    // Форматируем номера для красивого отображения
+    const formattedCardRub = formatForDisplay(CARD_NUMBER_RUB);
+    const formattedIbanEur = formatForDisplay(IBAN_EUR);
+    const formattedCardUah = formatForDisplay(CARD_NUMBER_UAH);
+
     switch (currency) {
         case 'rub':
-            return `Оплата в рублях:\n\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: ${priceRub}`;
+            return `Оплата в рублях:\n\nКарта: ${formattedCardRub}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: ${priceRub}`;
         case 'eur':
-            return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nПолучатель: Radmila Merkulova\n\nЦена: ${priceEur}`;
+            return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${formattedIbanEur}\nПолучатель: Radmila Merkulova\n\nЦена: ${priceEur}`;
         case 'uah':
-            return `Оплата в гривнах:\n\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: ${priceUah}`;
+            return `Оплата в гривнах:\n\nКарта: ${formattedCardUah}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: ${priceUah}`;
         default:
             return 'Реквизиты не найдены.';
     }
@@ -226,10 +237,8 @@ bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
     ctx.answerCbQuery();
 
     if (textToCopy) {
-        // Отправляем инструкцию
         await ctx.reply(`Нажмите на ${entityType} ниже, чтобы скопировать 👇`);
-        // Отправляем номер для копирования
-        await ctx.reply(`<code>${textToCopy}</code>`, { parse_mode: 'HTML' });
+        await ctx.reply(`<code>${textToCopy.replace(/\s/g, '')}</code>`, { parse_mode: 'HTML' });
     } else {
         await ctx.reply('Не удалось найти номер для копирования. Пожалуйста, свяжитесь с поддержкой.');
     }
