@@ -68,7 +68,7 @@ const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
 
 const workshopApplicationText = "Здравствуйте! Хочу записаться на воркшоп по арт-терапии в Аликанте. Есть ли свободные места на ближайшую субботу?";
 const adminUsername = ADMIN_NAME_RADMILA.replace('@', '');
-const workshopUrl = `https://t.me/${adminUsername}?text=${encodeURIComponent(workshopApplicationText)}`;
+const workshopUrl = `tg://resolve?domain=${adminUsername}&text=${encodeURIComponent(workshopApplicationText)}`;
 
 const workshopMenu = Markup.inlineKeyboard([
     Markup.button.url('Оставить заявку', workshopUrl),
