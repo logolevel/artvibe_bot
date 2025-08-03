@@ -37,6 +37,7 @@ const app = express();
 
 // --- Временное хранилище ---
 const paymentExpectations = new Map();
+const userPaymentMessages = new Map();
 
 // --- Клавиатуры ---
 const mainMenu = Markup.keyboard([
@@ -63,6 +64,21 @@ const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
     [Markup.button.callback('Оплата в евро', `${coursePrefix}_pay_eur`)],
     [Markup.button.callback('Оплата в гривнах', `${coursePrefix}_pay_uah`)],
 ]);
+
+// --- Вспомогательная функция для очистки сообщений ---
+async function cleanupPreviousMessages(ctx) {
+    const userId = ctx.from.id;
+    const messagesToDelete = userPaymentMessages.get(userId);
+
+    if (messagesToDelete && messagesToDelete.length > 0) {
+        await Promise.all(
+            messagesToDelete.map(msgId => ctx.deleteMessage(msgId).catch(() => {}))
+        );
+    }
+
+    userPaymentMessages.delete(userId);
+}
+
 
 // --- Логика бота ---
 
@@ -127,32 +143,15 @@ bot.action('author_learn_more', (ctx) => {
     ctx.answerCbQuery();
 });
 
-bot.action(['express_buy', 'author_buy'], (ctx) => {
+// --- Начало процесса оплаты ---
+bot.action(['express_buy', 'author_buy'], async (ctx) => {
+    await cleanupPreviousMessages(ctx);
     const coursePrefix = ctx.match[0].split('_')[0];
-    ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
+    const sentMessage = await ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
+    userPaymentMessages.set(ctx.from.id, [sentMessage.message_id]);
     ctx.answerCbQuery();
 });
 
-// --- Логика оплаты ---
-
-const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, adminName, currency) => {
-    const userId = ctx.from.id;
-    const username = ctx.from.username;
-
-    ctx.answerCbQuery();
-
-    await ctx.reply(
-        requisites,
-        Markup.inlineKeyboard([Markup.button.callback(copyText, `copy_${currency}`)])
-    );
-
-    if (username) {
-        ctx.reply("После оплаты, пожалуйста, отправьте скриншот об оплате в этот чат, просто прикрепите его как фото.");
-        paymentExpectations.set(userId, { adminId, course: coursePrefix });
-    } else {
-        ctx.reply(`После оплаты, пожалуйста, отправьте нам скриншот об оплате в личные сообщения: ${adminName} и мы сразу же отправим Вам ссылку на курс.`);
-    }
-};
 
 // --- Обработчики для кнопок оплаты ---
 
@@ -175,7 +174,6 @@ const createRequisitesText = (currency, coursePrefix) => {
         priceUah = '7000 UAH';
     }
 
-    // Форматируем номера для красивого отображения
     const formattedCardRub = formatForDisplay(CARD_NUMBER_RUB);
     const formattedIbanEur = formatForDisplay(IBAN_EUR);
     const formattedCardUah = formatForDisplay(CARD_NUMBER_UAH);
@@ -192,7 +190,11 @@ const createRequisitesText = (currency, coursePrefix) => {
     }
 };
 
-bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
+bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
+    await cleanupPreviousMessages(ctx);
+
+    const messageIds = [];
+    const userId = ctx.from.id;
     const [_, coursePrefix, currency] = ctx.match;
     const requisitesText = createRequisitesText(currency, coursePrefix);
     
@@ -212,12 +214,31 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
         copyButtonText = COPY_BUTTON_UAH;
     }
 
-    handlePayment(ctx, coursePrefix, requisitesText, copyButtonText, adminId, adminName, currency);
+    ctx.answerCbQuery();
+
+    const requisitesMsg = await ctx.reply(
+        requisitesText,
+        Markup.inlineKeyboard([Markup.button.callback(copyButtonText, `copy_${currency}`)])
+    );
+    messageIds.push(requisitesMsg.message_id);
+
+    let followUpMsg;
+    if (ctx.from.username) {
+        followUpMsg = await ctx.reply("После оплаты, пожалуйста, отправьте скриншот об оплате в этот чат, просто прикрепите его как фото.");
+        paymentExpectations.set(userId, { adminId, course: coursePrefix });
+    } else {
+        followUpMsg = await ctx.reply(`После оплаты, пожалуйста, отправьте нам скриншот об оплате в личные сообщения: ${adminName} и мы сразу же отправим Вам ссылку на курс.`);
+    }
+    messageIds.push(followUpMsg.message_id);
+    
+    userPaymentMessages.set(userId, messageIds);
 });
 
 
 // Обработчики для кнопок "Скопировать"
 bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
+    const userId = ctx.from.id;
+    const currentMessages = userPaymentMessages.get(userId) || [];
     const currency = ctx.match[1];
     let textToCopy = '';
     let entityType = 'номер карты';
@@ -233,14 +254,18 @@ bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
         entityType = 'номер карты';
     }
 
-    // Сразу убираем часики с кнопки
     ctx.answerCbQuery();
 
     if (textToCopy) {
-        await ctx.reply(`Нажмите на ${entityType} ниже, чтобы скопировать 👇`);
-        await ctx.reply(`<code>${textToCopy.replace(/\s/g, '')}</code>`, { parse_mode: 'HTML' });
+        const instructionMsg = await ctx.reply(`Нажмите на ${entityType} ниже, чтобы скопировать 👇`);
+        const numberMsg = await ctx.reply(`<code>${textToCopy.replace(/\s/g, '')}</code>`, { parse_mode: 'HTML' });
+        
+        currentMessages.push(instructionMsg.message_id, numberMsg.message_id);
+        userPaymentMessages.set(userId, currentMessages);
     } else {
-        await ctx.reply('Не удалось найти номер для копирования. Пожалуйста, свяжитесь с поддержкой.');
+        const errorMsg = await ctx.reply('Не удалось найти номер для копирования. Пожалуйста, свяжитесь с поддержкой.');
+        currentMessages.push(errorMsg.message_id);
+        userPaymentMessages.set(userId, currentMessages);
     }
 });
 
@@ -275,14 +300,14 @@ User ID: ${user.id}
 // --- Настройка Webhook и запуск сервера ---
 app.use(express.json());
 
-app.post(`/bot${BOT_TOKEN}`, (req, res) => {
-    bot.handleUpdate(req.body); // Обрабатываем обновление
-    res.sendStatus(200); // Отправляем статус "OK"
-});
-
 bot.telegram.setWebhook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`)
     .then(() => console.log('Webhook успешно установлен!'))
     .catch(console.error);
+
+app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+    bot.handleUpdate(req.body);
+    res.sendStatus(200);
+});
 
 app.get('/', (req, res) => {
     res.send('Привет! Бот работает.');
