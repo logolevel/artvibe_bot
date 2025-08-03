@@ -275,13 +275,14 @@ User ID: ${user.id}
 // --- Настройка Webhook и запуск сервера ---
 app.use(express.json());
 
+app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+    bot.handleUpdate(req.body); // Обрабатываем обновление
+    res.sendStatus(200); // Отправляем статус "OK"
+});
+
 bot.telegram.setWebhook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`)
     .then(() => console.log('Webhook успешно установлен!'))
     .catch(console.error);
-
-app.post(`/bot${BOT_TOKEN}`, (req, res) => {
-    bot.handleUpdate(req.body, res);
-});
 
 app.get('/', (req, res) => {
     res.send('Привет! Бот работает.');
