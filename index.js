@@ -89,7 +89,6 @@ async function cleanupSubMessages(ctx) {
         await Promise.all(
             messageState.subMenuIds.map(msgId => ctx.deleteMessage(msgId).catch(() => {}))
         );
-
         messageState.subMenuIds = [];
         userPaymentMessages.set(userId, messageState);
     }
@@ -158,12 +157,10 @@ bot.action('author_learn_more', (ctx) => {
     ctx.answerCbQuery();
 });
 
-// --- Начало процесса оплаты ---
 bot.action(['express_buy', 'author_buy'], async (ctx) => {
     await cleanupAllPaymentMessages(ctx);
     const coursePrefix = ctx.match[0].split('_')[0];
     const sentMessage = await ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
-
     userPaymentMessages.set(ctx.from.id, { mainMenuId: sentMessage.message_id, subMenuIds: [] });
     ctx.answerCbQuery();
 });
@@ -206,7 +203,7 @@ const createRequisitesText = (currency, coursePrefix) => {
 };
 
 bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
-    await cleanupSubMessages(ctx);
+    await cleanupSubMessages(ctx); 
     
     const userId = ctx.from.id;
     const messageState = userPaymentMessages.get(userId) || { mainMenuId: null, subMenuIds: [] };
@@ -250,7 +247,6 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
 });
 
 
-// Обработчики для кнопок "Скопировать"
 bot.action(/copy_(rub|eur|uah)/, async (ctx) => {
     const userId = ctx.from.id;
     const messageState = userPaymentMessages.get(userId) || { mainMenuId: null, subMenuIds: [] };
@@ -302,14 +298,24 @@ bot.on('photo', async (ctx) => {
 Username: @${user.username || 'не указан'}
 User ID: ${user.id}
         `;
+        
+        try {
+            await bot.telegram.sendPhoto(adminId, ctx.message.photo[ctx.message.photo.length - 1].file_id, { 
+                caption: caption,
+                parse_mode: 'Markdown' 
+            });
 
-        await bot.telegram.sendPhoto(adminId, ctx.message.photo[ctx.message.photo.length - 1].file_id, { 
-            caption: caption,
-            parse_mode: 'Markdown' 
-        });
-
-        await ctx.reply("Мы получили фото, проверим его и сразу же отправим Вам ссылку на курс.");
-        paymentExpectations.delete(userId);
+            await ctx.reply("Мы получили фото, проверим его и сразу же отправим Вам ссылку на курс.");
+        } catch (error) {
+            console.error(`Не удалось отправить фото админу ${adminId}:`, error);
+            if (error.description && error.description.includes('chat not found')) {
+                await ctx.reply(`Неудачная отправка фото. Отправь, пожалуйста, фото в личные сообщение нашему главному администратору: ${ADMIN_NAME_RADMILA}`);
+            } else {
+                await ctx.reply(`Произошла ошибка при отправке вашего фото. Пожалуйста, свяжитесь с поддержкой: ${ADMIN_NAME_RADMILA}`);
+            }
+        } finally {
+            paymentExpectations.delete(userId);
+        }
     }
 });
 
