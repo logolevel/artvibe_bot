@@ -181,9 +181,9 @@ const createRequisitesText = (currency, coursePrefix) => {
         priceEur = '75 EUR';
         priceUah = '3500 UAH';
     } else {
-        priceRub = '14000 руб.';
-        priceEur = '150 EUR';
-        priceUah = '7000 UAH';
+        priceRub = '86000 руб.';
+        priceEur = '940 EUR';
+        priceUah = '45000 UAH';
     }
 
     const formattedCardRub = formatForDisplay(CARD_NUMBER_RUB);
@@ -196,7 +196,7 @@ const createRequisitesText = (currency, coursePrefix) => {
         case 'eur':
             return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${formattedIbanEur}\nПолучатель: Radmila Merkulova\n\nЦена: ${priceEur}`;
         case 'uah':
-            return `Оплата в гривнах:\n\nКарта: ${formattedCardUah}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: ${priceUah}`;
+            return `Оплата в гривнях:\n\nКартка: ${formattedCardUah}\nБанк: ПриватБанк\Отримувач: Завірюха А.\n\nЦена: ${priceUah}`;
         default:
             return 'Реквизиты не найдены.';
     }
