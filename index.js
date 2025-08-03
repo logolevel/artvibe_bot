@@ -161,11 +161,11 @@ const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, a
 const createRequisitesText = (currency) => {
     switch (currency) {
         case 'rub':
-            return `Оплата в рублях:\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: 7500 руб.`;
+            return `Оплата в рублях:\n\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: 7500 руб.`;
         case 'eur':
-            return `Оплата в евро:\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nБанк: N26\nПолучатель: Danylo K.\n\nЦена: 75 EUR`;
+            return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nБанк: N26\nПолучатель: Danylo K.\n\nЦена: 75 EUR`;
         case 'uah':
-            return `Оплата в гривнах:\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: 3500 UAH`;
+            return `Оплата в гривнах:\n\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: 3500 UAH`;
         default:
             return 'Реквизиты не найдены.';
     }
