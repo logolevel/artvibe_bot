@@ -160,14 +160,27 @@ const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, a
 // --- Обработчики для кнопок оплаты ---
 // Теперь мы формируем текст прямо здесь и передаем его в handlePayment
 
-const createRequisitesText = (currency) => {
+const createRequisitesText = (currency, coursePrefix) => {
+    let priceRub, priceEur, priceUah;
+
+    // Определяем цены в зависимости от курса
+    if (coursePrefix === 'express') {
+        priceRub = '7500 руб.';
+        priceEur = '75 EUR';
+        priceUah = '3500 UAH';
+    } else { // 'author'
+        priceRub = '14000 руб.';
+        priceEur = '150 EUR';
+        priceUah = '7000 UAH';
+    }
+
     switch (currency) {
         case 'rub':
-            return `Оплата в рублях:\n\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: 7500 руб.`;
+            return `Оплата в рублях:\n\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: ${priceRub}`;
         case 'eur':
-            return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nПолучатель: Radmila Merkulova\n\nЦена: 75 EUR`;
+            return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nПолучатель: Radmila Merkulova\n\nЦена: ${priceEur}`;
         case 'uah':
-            return `Оплата в гривнах:\n\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: 3500 UAH`;
+            return `Оплата в гривнах:\n\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: ${priceUah}`;
         default:
             return 'Реквизиты не найдены.';
     }
@@ -175,7 +188,8 @@ const createRequisitesText = (currency) => {
 
 bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
     const [_, coursePrefix, currency] = ctx.match;
-    const requisitesText = createRequisitesText(currency);
+    // Передаем и валюту, и курс для формирования текста
+    const requisitesText = createRequisitesText(currency, coursePrefix);
     
     let adminId, adminName, copyButtonText;
 
