@@ -56,7 +56,8 @@ const expressCourseMenu = Markup.inlineKeyboard([
 
 const authorCourseMenu = Markup.inlineKeyboard([
     [Markup.button.callback('Узнать больше', 'author_learn_more')],
-    [Markup.button.callback('Приобрести авторский курс', 'author_buy')],
+    [Markup.button.callback('Приобрести: Standard', 'author_standard_buy')],
+    [Markup.button.callback('Приобрести: Premium', 'author_premium_buy')],
 ]);
 
 const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
@@ -157,9 +158,17 @@ bot.action('author_learn_more', (ctx) => {
     ctx.answerCbQuery();
 });
 
-bot.action(['express_buy', 'author_buy'], async (ctx) => {
+bot.action('express_buy', async (ctx) => {
     await cleanupAllPaymentMessages(ctx);
-    const coursePrefix = ctx.match[0].split('_')[0];
+    const coursePrefix = 'express';
+    const sentMessage = await ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
+    userPaymentMessages.set(ctx.from.id, { mainMenuId: sentMessage.message_id, subMenuIds: [] });
+    ctx.answerCbQuery();
+});
+
+bot.action(/^(author_standard|author_premium)_buy$/, async (ctx) => {
+    await cleanupAllPaymentMessages(ctx);
+    const coursePrefix = ctx.match[1];
     const sentMessage = await ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
     userPaymentMessages.set(ctx.from.id, { mainMenuId: sentMessage.message_id, subMenuIds: [] });
     ctx.answerCbQuery();
@@ -173,6 +182,7 @@ const formatForDisplay = (numberString) => {
     return numberString.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim();
 };
 
+
 const createRequisitesText = (currency, coursePrefix) => {
     let priceRub, priceEur, priceUah;
 
@@ -180,7 +190,11 @@ const createRequisitesText = (currency, coursePrefix) => {
         priceRub = '7500 руб.';
         priceEur = '75 EUR';
         priceUah = '3500 UAH';
-    } else {
+    } else if (coursePrefix === 'author_standard') {
+        priceRub = '86000 руб.';
+        priceEur = '550 EUR';
+        priceUah = '26000 UAH';
+    } else { // author_premium
         priceRub = '86000 руб.';
         priceEur = '940 EUR';
         priceUah = '45000 UAH';
@@ -196,13 +210,13 @@ const createRequisitesText = (currency, coursePrefix) => {
         case 'eur':
             return `Оплата в евро:\n\nBIC: PESOBEB1\nIBAN: ${formattedIbanEur}\nПолучатель: Radmila Merkulova\n\nЦена: ${priceEur}`;
         case 'uah':
-            return `Оплата в гривнях:\n\nКартка: ${formattedCardUah}\nБанк: ПриватБанк\Отримувач: Завірюха А.\n\nЦена: ${priceUah}`;
+            return `Оплата в гривнях:\n\nКартка: ${formattedCardUah}\nБанк: ПриватБанк\nОтримувач: Завірюха А.\n\nЦіна: ${priceUah}`;
         default:
             return 'Реквизиты не найдены.';
     }
 };
 
-bot.action(/^(express|author)_pay_(rub|eur|uah)$/, async (ctx) => {
+bot.action(/^(express|author_standard|author_premium)_pay_(rub|eur|uah)$/, async (ctx) => {
     await cleanupSubMessages(ctx); 
     
     const userId = ctx.from.id;
@@ -288,7 +302,16 @@ bot.on('photo', async (ctx) => {
 
     if (expectation) {
         const { adminId, course } = expectation;
-        const courseName = course === 'express' ? 'Экспресс курс' : 'Авторский курс';
+
+        let courseName = 'Неизвестный курс';
+        if (course === 'express') {
+            courseName = 'Экспресс курс';
+        } else if (course === 'author_standard') {
+            courseName = 'Авторский курс (Standard)';
+        } else if (course === 'author_premium') {
+            courseName = 'Авторский курс (Premium)';
+        }
+
         const user = ctx.from;
         const caption = `
 Новый скриншот оплаты!
