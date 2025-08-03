@@ -15,6 +15,5 @@ dev_art_therapy_chanel
 # TODO
 
 1. Еще нужно сделать оплату через Paypal: radaeuro2016@gmail.com
-2. Добавить кнопку для записи на оффлайн
 
 # BOT logic

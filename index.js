@@ -41,7 +41,7 @@ const userPaymentMessages = new Map();
 
 // --- Клавиатуры ---
 const mainMenu = Markup.keyboard([
-    ['Бесплатный урок'],['Запись на workshop'],
+    ['Бесплатный урок', 'Запись на workshop'],
     ['Экспресс курс', 'Авторский курс'],
 ]).resize();
 
