@@ -41,7 +41,7 @@ const userPaymentMessages = new Map();
 
 // --- Клавиатуры ---
 const mainMenu = Markup.keyboard([
-    ['Бесплатный урок'],
+    ['Бесплатный урок'],['Запись на workshop'],
     ['Экспресс курс', 'Авторский курс'],
 ]).resize();
 
@@ -65,6 +65,15 @@ const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
     [Markup.button.callback('Оплата в евро', `${coursePrefix}_pay_eur`)],
     [Markup.button.callback('Оплата в гривнах', `${coursePrefix}_pay_uah`)],
 ]);
+
+const workshopApplicationText = "Здравствуйте! Хочу записаться на воркшоп по арт-терапии в Аликанте. Есть ли свободные места на ближайшую субботу?";
+const adminUsername = ADMIN_NAME_RADMILA.replace('@', '');
+const workshopUrl = `https://t.me/${adminUsername}?text=${encodeURIComponent(workshopApplicationText)}`;
+
+const workshopMenu = Markup.inlineKeyboard([
+    Markup.button.url('Оставить заявку', workshopUrl),
+]);
+
 
 // --- Вспомогательные функции для очистки сообщений ---
 async function cleanupAllPaymentMessages(ctx) {
@@ -122,6 +131,15 @@ bot.hears('Бесплатный урок', (ctx) => {
 Это отличная возможность познакомиться с нашим подходом к обучению. Нажмите на кнопку ниже, чтобы получить мгновенный доступ.
     `;
     ctx.replyWithMarkdown(message, freeLessonMenu);
+});
+
+
+bot.hears('Запись на workshop', (ctx) => {
+    const message = `
+Если вы хотите записаться на workshop, который проходит в Аликанте в 17:00. 
+Оставьте, пожалуйста, заявку, написав администратору в телеграм ${ADMIN_NAME_RADMILA}
+    `;
+    ctx.reply(message, workshopMenu);
 });
 
 bot.hears('Экспресс курс', (ctx) => {
