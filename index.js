@@ -135,15 +135,12 @@ bot.action(['express_buy', 'author_buy'], (ctx) => {
 
 // --- Логика оплаты ---
 
-const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, adminName) => {
+const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, adminName, currency) => {
     const userId = ctx.from.id;
     const username = ctx.from.username;
-    const currency = copyText === COPY_BUTTON_RUB ? 'rub' : (copyText === COPY_BUTTON_EUR ? 'eur' : 'uah');
 
-    // Сразу отвечаем на колбэк, чтобы убрать часики на кнопке
     ctx.answerCbQuery();
 
-    // Отправляем НОВОЕ сообщение с реквизитами, вместо редактирования старого
     await ctx.reply(
         requisites,
         Markup.inlineKeyboard([Markup.button.callback(copyText, `copy_${currency}`)])
@@ -158,12 +155,10 @@ const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, a
 };
 
 // --- Обработчики для кнопок оплаты ---
-// Теперь мы формируем текст прямо здесь и передаем его в handlePayment
 
 const createRequisitesText = (currency, coursePrefix) => {
     let priceRub, priceEur, priceUah;
 
-    // Определяем цены в зависимости от курса
     if (coursePrefix === 'express') {
         priceRub = '7500 руб.';
         priceEur = '75 EUR';
@@ -188,7 +183,6 @@ const createRequisitesText = (currency, coursePrefix) => {
 
 bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
     const [_, coursePrefix, currency] = ctx.match;
-    // Передаем и валюту, и курс для формирования текста
     const requisitesText = createRequisitesText(currency, coursePrefix);
     
     let adminId, adminName, copyButtonText;
@@ -207,7 +201,7 @@ bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
         copyButtonText = COPY_BUTTON_UAH;
     }
 
-    handlePayment(ctx, coursePrefix, requisitesText, copyButtonText, adminId, adminName);
+    handlePayment(ctx, coursePrefix, requisitesText, copyButtonText, adminId, adminName, currency);
 });
 
 
