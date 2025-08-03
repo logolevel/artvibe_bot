@@ -3,7 +3,6 @@ const { Telegraf, Markup } = require('telegraf');
 const express = require('express');
 
 // --- Переменные окружения ---
-// Обязательно создайте файл .env и заполните его по примеру .env.example
 const {
     BOT_TOKEN,
     PORT,
@@ -17,24 +16,26 @@ const {
     ADMIN_NAME_RADMILA,
     ADMIN_NAME_DANYLO,
     ADMIN_NAME_ANASTASIA,
-    REQUISITES_RUB,
-    REQUISITES_EUR,
-    REQUISITES_UAH,
-    COPY_BUTTON_RUB,
-    COPY_BUTTON_EUR,
-    COPY_BUTTON_UAH,
+    CARD_NUMBER_RUB,
+    IBAN_EUR,
+    CARD_NUMBER_UAH,
 } = process.env;
 
 if (!BOT_TOKEN || !PORT || !WEBHOOK_URL) {
     throw new Error("Необходимо задать переменные окружения: BOT_TOKEN, PORT и WEBHOOK_URL");
 }
 
+// --- Тексты на кнопках ---
+const COPY_BUTTON_RUB = "Скопировать номер 👇";
+const COPY_BUTTON_EUR = "Скопировать IBAN 👇";
+const COPY_BUTTON_UAH = "Скопировать номер 👇";
+
+
 // --- Инициализация бота и Express ---
 const bot = new Telegraf(BOT_TOKEN);
 const app = express();
 
-// --- Временное хранилище для отслеживания ожиданий оплаты ---
-// В будущем это будет заменено на базу данных
+// --- Временное хранилище ---
 const paymentExpectations = new Map();
 
 // --- Клавиатуры ---
@@ -60,40 +61,29 @@ const authorCourseMenu = Markup.inlineKeyboard([
 const paymentMenu = (coursePrefix) => Markup.inlineKeyboard([
     [Markup.button.callback('Оплата в рублях', `${coursePrefix}_pay_rub`)],
     [Markup.button.callback('Оплата в евро', `${coursePrefix}_pay_eur`)],
-    [Markup.button.callback('Оплата в гривнях', `${coursePrefix}_pay_uah`)],
+    [Markup.button.callback('Оплата в гривнах', `${coursePrefix}_pay_uah`)],
 ]);
-
 
 // --- Логика бота ---
 
-// [START] - Приветствие и главное меню
 bot.start(async (ctx) => {
     const welcomeMessage = `
 👋 **Добро пожаловать!**
-
-Я ваш помощник в мире новых знаний. Здесь вы можете получить доступ к эксклюзивным курсам.
 
 Выберите интересующий вас раздел в меню ниже. 👇
     `;
     await ctx.replyWithMarkdown(welcomeMessage, mainMenu);
 });
 
-// [Служебная команда] - Получение file_id для PDF из канала
 bot.on('channel_post', async (ctx) => {
-    // Проверяем, что пост содержит документ и что это PDF
     if (ctx.channelPost && ctx.channelPost.document && ctx.channelPost.document.mime_type === 'application/pdf') {
         const fileId = ctx.channelPost.document.file_id;
         const chatId = ctx.channelPost.chat.id;
-        
-        // Отправляем ответ в тот же канал
         await bot.telegram.sendMessage(chatId, `PDF получен (из канала). Вот его file_id:`);
         await bot.telegram.sendMessage(chatId, `<code>${fileId}</code>`, { parse_mode: 'HTML' });
     }
 });
 
-// --- Обработка кнопок главного меню ---
-
-// [Меню] -> "Бесплатный урок"
 bot.hears('Бесплатный урок', (ctx) => {
     const message = `
 ✨ **Бесплатный урок уже ждет вас!**
@@ -103,7 +93,6 @@ bot.hears('Бесплатный урок', (ctx) => {
     ctx.replyWithMarkdown(message, freeLessonMenu);
 });
 
-// [Меню] -> "Экспресс курс"
 bot.hears('Экспресс курс', (ctx) => {
     const message = `
 🚀 **Экспресс курс**
@@ -113,7 +102,6 @@ bot.hears('Экспресс курс', (ctx) => {
     ctx.replyWithMarkdown(message, expressCourseMenu);
 });
 
-// [Меню] -> "Авторский курс"
 bot.hears('Авторский курс', (ctx) => {
     const message = `
 🎓 **Авторский курс**
@@ -123,27 +111,18 @@ bot.hears('Авторский курс', (ctx) => {
     ctx.replyWithMarkdown(message, authorCourseMenu);
 });
 
-// --- Обработка колбэков (нажатий на инлайн-кнопки) ---
-
-// "Узнать больше" для Экспресс курса
 bot.action('express_learn_more', (ctx) => {
-    if (!EXPRESS_PDF_FILE_ID) {
-        return ctx.reply('Файл с информацией о курсе временно недоступен.');
-    }
+    if (!EXPRESS_PDF_FILE_ID) return ctx.reply('Файл с информацией о курсе временно недоступен.');
     ctx.replyWithDocument(EXPRESS_PDF_FILE_ID, { caption: 'Подробная программа экспресс курса.' });
     ctx.answerCbQuery();
 });
 
-// "Узнать больше" для Авторского курса
 bot.action('author_learn_more', (ctx) => {
-    if (!AUTHOR_PDF_FILE_ID) {
-        return ctx.reply('Файл с информацией о курсе временно недоступен.');
-    }
+    if (!AUTHOR_PDF_FILE_ID) return ctx.reply('Файл с информацией о курсе временно недоступен.');
     ctx.replyWithDocument(AUTHOR_PDF_FILE_ID, { caption: 'Подробная программа авторского курса.' });
     ctx.answerCbQuery();
 });
 
-// "Приобрести" для обоих курсов
 bot.action(['express_buy', 'author_buy'], (ctx) => {
     const coursePrefix = ctx.match[0].split('_')[0];
     ctx.reply('Выберите валюту для оплаты:', paymentMenu(coursePrefix));
@@ -152,55 +131,87 @@ bot.action(['express_buy', 'author_buy'], (ctx) => {
 
 // --- Логика оплаты ---
 
-const handlePayment = async (ctx, coursePrefix, currency, requisites, copyText, adminId, adminName) => {
+const handlePayment = async (ctx, coursePrefix, requisites, copyText, adminId, adminName) => {
     const userId = ctx.from.id;
     const username = ctx.from.username;
+    const currency = copyText === COPY_BUTTON_RUB ? 'rub' : (copyText === COPY_BUTTON_EUR ? 'eur' : 'uah');
 
-    // Показываем реквизиты
-    await ctx.editMessageText(
+    // Сразу отвечаем на колбэк, чтобы убрать часики на кнопке
+    ctx.answerCbQuery();
+
+    // Отправляем НОВОЕ сообщение с реквизитами, вместо редактирования старого
+    await ctx.reply(
         requisites,
         Markup.inlineKeyboard([Markup.button.callback(copyText, `copy_${currency}`)])
     );
 
-    // Устанавливаем таймер на 1 минуту
     setTimeout(() => {
         if (username) {
             ctx.reply("Отправьте скриншот оплаты в этот чат, просто прикрепите фото.");
-            // Устанавливаем флаг ожидания фото, сохраняя информацию о курсе
             paymentExpectations.set(userId, { adminId, course: coursePrefix });
         } else {
             ctx.reply(`Пожалуйста, отправьте нам ${adminName} скриншот оплаты в личные сообщения, и мы сразу же отправим Вам ссылку на курс.`);
         }
-    }, 60 * 1000); // 1 минута
-
-    ctx.answerCbQuery();
+    }, 60 * 1000);
 };
 
-// Обработчики для кнопок оплаты
-bot.action('express_pay_rub', (ctx) => handlePayment(ctx, 'express', 'rub', REQUISITES_RUB, COPY_BUTTON_RUB, ADMIN_ID_RADMILA, ADMIN_NAME_RADMILA));
-bot.action('express_pay_eur', (ctx) => handlePayment(ctx, 'express', 'eur', REQUISITES_EUR, COPY_BUTTON_EUR, ADMIN_ID_DANYLO, ADMIN_NAME_DANYLO));
-bot.action('express_pay_uah', (ctx) => handlePayment(ctx, 'express', 'uah', REQUISITES_UAH, COPY_BUTTON_UAH, ADMIN_ID_ANASTASIA, ADMIN_NAME_ANASTASIA));
+// --- Обработчики для кнопок оплаты ---
+// Теперь мы формируем текст прямо здесь и передаем его в handlePayment
 
-bot.action('author_pay_rub', (ctx) => handlePayment(ctx, 'author', 'rub', REQUISITES_RUB, COPY_BUTTON_RUB, ADMIN_ID_RADMILA, ADMIN_NAME_RADMILA));
-bot.action('author_pay_eur', (ctx) => handlePayment(ctx, 'author', 'eur', REQUISITES_EUR, COPY_BUTTON_EUR, ADMIN_ID_DANYLO, ADMIN_NAME_DANYLO));
-bot.action('author_pay_uah', (ctx) => handlePayment(ctx, 'author', 'uah', REQUISITES_UAH, COPY_BUTTON_UAH, ADMIN_ID_ANASTASIA, ADMIN_NAME_ANASTASIA));
+const createRequisitesText = (currency) => {
+    switch (currency) {
+        case 'rub':
+            return `Оплата в рублях:\nКарта: ${CARD_NUMBER_RUB}\nБанк: Сбербанк\nПолучатель: Джульетта Ф.\n\nЦена: 7500 руб.`;
+        case 'eur':
+            return `Оплата в евро:\nBIC: PESOBEB1\nIBAN: ${IBAN_EUR}\nБанк: N26\nПолучатель: Danylo K.\n\nЦена: 75 EUR`;
+        case 'uah':
+            return `Оплата в гривнах:\nКарта: ${CARD_NUMBER_UAH}\nБанк: ПриватБанк\nПолучатель: Завірюха А.\n\nЦена: 3500 UAH`;
+        default:
+            return 'Реквизиты не найдены.';
+    }
+};
+
+bot.action(/^(express|author)_pay_(rub|eur|uah)$/, (ctx) => {
+    const [_, coursePrefix, currency] = ctx.match;
+    const requisitesText = createRequisitesText(currency);
+    
+    let adminId, adminName, copyButtonText;
+
+    if (currency === 'rub') {
+        adminId = ADMIN_ID_RADMILA;
+        adminName = ADMIN_NAME_RADMILA;
+        copyButtonText = COPY_BUTTON_RUB;
+    } else if (currency === 'eur') {
+        adminId = ADMIN_ID_DANYLO;
+        adminName = ADMIN_NAME_DANYLO;
+        copyButtonText = COPY_BUTTON_EUR;
+    } else { // uah
+        adminId = ADMIN_ID_ANASTASIA;
+        adminName = ADMIN_NAME_ANASTASIA;
+        copyButtonText = COPY_BUTTON_UAH;
+    }
+
+    handlePayment(ctx, coursePrefix, requisitesText, copyButtonText, adminId, adminName);
+});
 
 
 // Обработчики для кнопок "Скопировать"
-// Telegraf не может напрямую копировать в буфер обмена, поэтому просто показываем уведомление
 bot.action(/copy_(rub|eur|uah)/, (ctx) => {
     const currency = ctx.match[1];
     let textToCopy = '';
-    // Эта проверка нужна, чтобы извлечь только номер/IBAN из строки с реквизитами
-    if (currency === 'rub') textToCopy = REQUISITES_RUB.match(/\d[\d\s]+\d/)[0];
-    if (currency === 'eur') textToCopy = REQUISITES_EUR.match(/DE\d+/)[0];
-    if (currency === 'uah') textToCopy = REQUISITES_UAH.match(/\d[\d\s]+\d/)[0];
 
-    // Отправляем реквизиты отдельным сообщением, чтобы их было легко скопировать на мобильных устройствах
-    ctx.reply(`<code>${textToCopy}</code>`, { parse_mode: 'HTML' });
-    ctx.answerCbQuery('Номер скопирован!');
+    // Логика стала намного проще и надежнее
+    if (currency === 'rub') textToCopy = CARD_NUMBER_RUB;
+    if (currency === 'eur') textToCopy = IBAN_EUR;
+    if (currency === 'uah') textToCopy = CARD_NUMBER_UAH;
+
+    if (textToCopy) {
+        ctx.reply(`<code>${textToCopy}</code>`, { parse_mode: 'HTML' });
+        ctx.answerCbQuery('Номер скопирован!');
+    } else {
+        ctx.answerCbQuery('Не удалось извлечь номер для копирования.');
+    }
 });
-
 
 // Обработка получения фото (скриншота оплаты)
 bot.on('photo', async (ctx) => {
@@ -216,49 +227,39 @@ bot.on('photo', async (ctx) => {
 
 Курс: **${courseName}**
 Пользователь: ${user.first_name} ${user.last_name || ''}
-Username: @${user.username}
+Username: @${user.username || 'не указан'}
 User ID: ${user.id}
         `;
 
-        // Пересылаем фото админу
         await bot.telegram.sendPhoto(adminId, ctx.message.photo[ctx.message.photo.length - 1].file_id, { 
             caption: caption,
             parse_mode: 'Markdown' 
         });
 
-        // Отвечаем пользователю
         await ctx.reply("Мы получили фото, проверим его и сразу же отправим Вам ссылку на курс.");
-
-        // Удаляем флаг ожидания
         paymentExpectations.delete(userId);
     }
 });
 
-
-// --- Настройка Webhook ---
+// --- Настройка Webhook и запуск сервера ---
 app.use(express.json());
 
-// Устанавливаем вебхук при запуске
 bot.telegram.setWebhook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`)
     .then(() => console.log('Webhook успешно установлен!'))
     .catch(console.error);
 
-// Обрабатываем запросы от Telegram
 app.post(`/bot${BOT_TOKEN}`, (req, res) => {
     bot.handleUpdate(req.body, res);
 });
 
-// Стартовая страница для проверки работы сервера
 app.get('/', (req, res) => {
     res.send('Привет! Бот работает.');
 });
 
-// Запуск сервера
 app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
 });
 
-// Обработка ошибок
 bot.catch((err, ctx) => {
     console.error(`Ошибка для ${ctx.updateType}`, err);
 });

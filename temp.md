@@ -3,6 +3,8 @@
 
 # bots
 dev_art_therapy_chanel
+@artvibe_therapy_bot
+
 @art_therapy_presentation_bot
 @dev_art_therapy_presentation_bot
 
@@ -13,6 +15,9 @@ dev_art_therapy_chanel
 
 
 # TODO
+2. Добавить описание в бот
+
+# BOT logic
 Напиши телеграм бот на JS, который будет размещаться на railway, будет использоваться webhook. Реализуй логику бота, которую я опишу.
 
 Телеграм бот будет добавлен в канал, как администратор, чтобы была возможность загрузить pdf файл и получить file_id этого файла, чтобы отправлять его пользователю. Реализуй эту служебную команду в боте.
