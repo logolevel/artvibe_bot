@@ -133,7 +133,6 @@ bot.hears('Бесплатный урок', (ctx) => {
     ctx.replyWithMarkdown(message, freeLessonMenu);
 });
 
-
 bot.hears('Запись на workshop', (ctx) => {
     const message = `
 Если вы хотите записаться на workshop, который проходит в Аликанте в 17:00. 
